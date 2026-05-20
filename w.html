@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>一天一個小目標系統</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --secondary: #fdfdfd;
+            --accent: #ffcc00;
+            --danger: #ff4d4d;
+        }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: #e3d3f3; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 800px; background: #fff; padding: 30px; border-radius: 20px; box-shadow: 10px 10px 20px #bebebe, -10px -10px 20px #ffffff; }
+        .hidden { display: none; }
+        h2 { border-left: 5px solid var(--primary); padding-left: 10px; color: #333; }
+        
+        /* 表單樣式 */
+        input, select, button { padding: 10px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; }
+        button { background: var(--primary); color: white; border: none; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #057678; }
+        
+        /* 測驗樣式 */
+        .quiz-item { margin-bottom: 20px; padding: 15px; border-bottom: 1px solid #eee; }
+        .quiz-item p { font-weight: bold; }
+        
+        /* 主介面樣式 */
+        .user-info-card { display: flex; align-items: center; background: var(--secondary); padding: 15px; border-radius: 15px; margin-bottom: 20px; }
+        .avatar { width: 60px; height: 60px; background: #ddd; border-radius: 50%; margin-right: 15px; }
+        .exp-bar-bg { background: #ddd; height: 20px; border-radius: 10px; flex-grow: 1; margin: 10px 0; overflow: hidden; }
+        .exp-bar-fill { background: var(--accent); height: 100%; width: 0%; transition: width 0.5s; }
+        
+        /* 任務列表 */
+        .task-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .task-column { background: #f9f9f9; padding: 15px; border-radius: 10px; border: 1px solid #eee; }
+        .task-item { background: white; padding: 10px; margin-top: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .task-btns { display: flex; justify-content: space-between; margin-top: 5px; }
+        .btn-done { background: #28a745; font-size: 12px; }
+        .btn-del { background: var(--danger); font-size: 12px; }
+
+        @media (max-width: 600px) {
+            .task-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 第一步：輸入資料 -->
+    <div id="step1">
+        <h2>歡迎來到小目標系統，請先輸入您的資料</h2>
+        <input type="text" id="u-name" placeholder="請輸入暱稱"><br>
+        <select id="u-gender">
+            <option value="">請選擇性別</option>
+            <option value="男">男</option>
+            <option value="女">女</option>
+            <option value="其他">其他</option>
+        </select><br>
+        <div>
+            西元 <input type="number" id="u-year" placeholder="西元年份" min="1900" max="2030" style="width: 80px;"> 年
+            <input type="number" id="u-month" placeholder="月份" min="1" max="12" style="width: 50px;"> 月
+            <input type="number" id="u-day" placeholder="日期" min="1" max="31" style="width: 50px;"> 日
+        </div>
+        <button onclick="startQuiz()">開始測驗</button>
+    </div>
+
+    <!-- 第二步：測驗 -->
+    <div id="step2" class="hidden">
+        <h2>你的人生階級測驗</h2>
+        <div id="quiz-container"></div>
+        <button onclick="calculateQuiz()">提交測驗結果</button>
+    </div>
+
+    <!-- 第三步：結果展示 -->
+    <div id="step3" class="hidden">
+        <h2>測驗結果</h2>
+        <div id="result-text" style="font-size: 1.2em; line-height: 1.6;"></div>
+        <button onclick="enterSystem()">進入系統</button>
+    </div>
+
+    <!-- 第四步：主系統 -->
+    <div id="step4" class="hidden">
+        <div class="user-info-card">
+            <div class="avatar"></div>
+            <div style="flex-grow: 1;">
+                <span id="display-name" style="font-weight: bold;"></span> 
+                <span id="display-rank" style="color: var(--primary); margin-left: 10px;"></span>
+                <div class="exp-bar-bg"><div id="exp-fill" class="exp-bar-fill"></div></div>
+                <small>目前積分: <span id="current-score">0</span> / 下一階門檻: <span id="next-rank-score">---</span></small>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <a href="reminder.html" style="display: inline-block; background: var(--accent); color: #333; padding: 10px 16px; border-radius: 10px; text-decoration: none; font-weight: bold;">事件提醒</a>
+        </div>
+
+        <h3>新增任務</h3>
+        <div style="background: #f0f0f0; padding: 15px; border-radius: 10px;">
+            <input type="text" id="task-name" placeholder="任務內容" style="width: 70%;">
+            <select id="task-type" onchange="updateScoreOptions()">
+                <option value="weekly">每週任務</option>
+                <option value="monthly">每月任務</option>
+                <option value="special">特殊任務</option>
+            </select>
+            <select id="task-points"></select>
+            <button onclick="addTask()">新增任務</button>
+        </div>
+
+        <div class="task-grid" style="margin-top: 20px;">
+            <div class="task-column">
+                <h4>每週任務</h4>
+                <div id="list-weekly"></div>
+            </div>
+            <div class="task-column">
+                <h4>每月任務</h4>
+                <div id="list-monthly"></div>
+            </div>
+            <div class="task-column">
+                <h4>特殊任務</h4>
+                <div id="list-special"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 基礎資料 ---
+    const survey = [
+        {
+            question: "外送員打電話給你時…",
+            options: [
+                "A. 我直接不敢接",
+                "B. 接了但超慌",
+                "C. 正常應對",
+                "D. 還會順便確認餐點備註"
+            ]
+        },
+        {
+            question: "房間亂掉時你通常…",
+            options: [
+                "A. 等別人受不了",
+                "B. 想整理但拖很久",
+                "C. 會定期整理",
+                "D. 已經有自己的收納邏輯"
+            ]
+        },
+        {
+            question: "遇到情緒低潮時…",
+            options: [
+                "A. 完全爆炸",
+                "B. 狂滑手機逃避",
+                "C. 會慢慢消化",
+                "D. 能分析原因並調整狀態"
+            ]
+        },
+        {
+            question: "有人請你處理事情時…",
+            options: [
+                "A. 我會裝死",
+                "B. 查半天還是不懂",
+                "C. 能慢慢完成",
+                "D. 已經熟到能教別人"
+            ]
+        },
+        {
+            question: "你對金錢的態度比較像…",
+            options: [
+                "A. 花到沒錢再說",
+                "B. 偶爾記帳",
+                "C. 知道自己收入支出",
+                "D. 有長期規劃與存款目標"
+            ]
+        },
+        {
+            question: "朋友突然情緒崩潰找你…",
+            options: [
+                "A. 我比他更慌",
+                "B. 不知道怎麼安慰",
+                "C. 能陪伴傾聽",
+                "D. 能安撫又給實際幫助"
+            ]
+        },
+        {
+            question: "你做錯事時第一反應是…",
+            options: [
+                "A. 先找理由",
+                "B. 想逃避",
+                "C. 承認問題",
+                "D. 立刻想補救方案"
+            ]
+        },
+        {
+            question: "半夜馬桶堵住時…",
+            options: [
+                "A. 等爸媽來處理",
+                "B. Google 到崩潰",
+                "C. 嘗試自己處理",
+                "D. 熟練到像水電師傅"
+            ]
+        },
+        {
+            question: "面對不喜歡的人…",
+            options: [
+                "A. 情緒直接寫臉上",
+                "B. 勉強裝正常",
+                "C. 能維持禮貌",
+                "D. 還能穩定社交與合作"
+            ]
+        },
+        {
+            question: "你的作息通常…",
+            options: [
+                "A. 完全混亂",
+                "B. 偶爾正常",
+                "C. 大致穩定",
+                "D. 穩定到像人體時鐘"
+            ]
+        },
+        {
+            question: "突然被取消約時…",
+            options: [
+                "A. 大暴怒",
+                "B. 心情差很久",
+                "C. 有點失落但還好",
+                "D. 直接安排新行程"
+            ]
+        },
+        {
+            question: "看到爸媽變老時…",
+            options: [
+                "A. 沒什麼感覺",
+                "B. 偶爾想到會難過",
+                "C. 開始意識責任",
+                "D. 已經主動分擔很多事"
+            ]
+        },
+        {
+            question: "你的手機通知…",
+            options: [
+                "A. 999+",
+                "B. 很亂",
+                "C. 大致有整理",
+                "D. 幾乎都即時處理完"
+            ]
+        },
+        {
+            question: "被批評時…",
+            options: [
+                "A. 直接不爽",
+                "B. 表面沒事內心爆炸",
+                "C. 能聽進部分內容",
+                "D. 能冷靜分析是否有道理"
+            ]
+        },
+        {
+            question: "做飯對你來說…",
+            options: [
+                "A. 泡麵就是極限",
+                "B. 會簡單料理",
+                "C. 能照食譜完成",
+                "D. 已進入「冰箱有什麼做什麼」境界"
+            ]
+        },
+        {
+            question: "突然停電時…",
+            options: [
+                "A. 我先大聲叫爸媽",
+                "B. 開手機手電筒發呆",
+                "C. 先檢查狀況",
+                "D. 已知道總開關在哪"
+            ]
+        },
+        {
+            question: "面對人生未來…",
+            options: [
+                "A. 完全沒想過",
+                "B. 想到會焦慮",
+                "C. 有大概方向",
+                "D. 已經開始一步步執行"
+            ]
+        },
+        {
+            question: "你最常拖延的是…",
+            options: [
+                "A. 所有事情",
+                "B. 重要事情",
+                "C. 少數麻煩事",
+                "D. 幾乎不拖"
+            ]
+        },
+        {
+            question: "和別人吵架時…",
+            options: [
+                "A. 一定要贏",
+                "B. 情緒先爆",
+                "C. 願意溝通",
+                "D. 能控制情緒並解決問題"
+            ]
+        },
+        {
+            question: "看到別人比自己厲害時…",
+            options: [
+                "A. 超嫉妒",
+                "B. 有點自卑",
+                "C. 當成激勵",
+                "D. 會去研究對方怎麼做到的"
+            ]
+        },
+        {
+            question: "你的網購習慣…",
+            options: [
+                "A. 衝動亂買",
+                "B. 常後悔",
+                "C. 會比價",
+                "D. 能克制非必要消費"
+            ]
+        },
+        {
+            question: "突然要獨自出國…",
+            options: [
+                "A. 我不行",
+                "B. 很焦慮",
+                "C. 可以努力完成",
+                "D. 已經能自己規劃行程"
+            ]
+        },
+        {
+            question: "對「孤獨」的感覺…",
+            options: [
+                "A. 無法接受",
+                "B. 很容易空虛",
+                "C. 偶爾享受獨處",
+                "D. 能自在跟自己相處"
+            ]
+        },
+        {
+            question: "你的情緒穩定度…",
+            options: [
+                "A. 像雲霄飛車",
+                "B. 很容易被影響",
+                "C. 大致穩定",
+                "D. 壓力來時也能冷靜"
+            ]
+        },
+        {
+            question: "你覺得真正的大人是…",
+            options: [
+                "A. 很無聊的人",
+                "B. 有錢的人",
+                "C. 能照顧自己的人",
+                "D. 能照顧自己也照顧別人的人"
+            ]
+        }
+    ];
+    
+    const rankConfig = [
+        { name: "嬰兒", min: 0 }, { name: "幼兒", min: 1001 }, { name: "初級小孩", min: 4001 },
+        { name: "中級小孩", min: 15001 }, { name: "高級小孩", min: 24001 }, { name: "頂級小孩", min: 33001 },
+        { name: "初級大人", min: 48001 }, { name: "中級大人", min: 98001 }, { name: "高級大人", min: 248001 },
+        { name: "頂級大人", min: 448001 }
+    ];
+
+    const storageKey = 'wAppState';
+    let userData = { name: "", gender: "", year: "", month: "", day: "", score: 0, rank: "" };
+    let tasks = { weekly: [], monthly: [], special: [] };
+
+    function loadState() {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) return;
+        try {
+            const saved = JSON.parse(raw);
+            if (saved.userData) userData = Object.assign(userData, saved.userData);
+            if (saved.tasks) tasks = Object.assign(tasks, saved.tasks);
+
+            if (userData.rank) {
+                document.getElementById('step1').classList.add('hidden');
+                document.getElementById('step2').classList.add('hidden');
+                document.getElementById('step3').classList.add('hidden');
+                document.getElementById('step4').classList.remove('hidden');
+                updateScoreOptions();
+                updateUI();
+            }
+        } catch (e) {
+            console.warn('無法載入儲存狀態', e);
+        }
+    }
+
+    function saveState() {
+        const state = {
+            userData,
+            tasks
+        };
+        localStorage.setItem(storageKey, JSON.stringify(state));
+    }
+
+    // --- 初始化測驗 ---
+    function startQuiz() {
+        const name = document.getElementById('u-name').value.trim();
+        const gender = document.getElementById('u-gender').value;
+        const year = document.getElementById('u-year').value;
+        const month = document.getElementById('u-month').value;
+        const day = document.getElementById('u-day').value;
+
+        if (!name || !gender || !year || !month || !day) {
+            return alert("請填寫所有必填欄位");
+        }
+
+        userData.name = name;
+        userData.gender = gender;
+        userData.year = year;
+        userData.month = month;
+        userData.day = day;
+        saveState();
+
+        document.getElementById('step1').classList.add('hidden');
+        document.getElementById('step2').classList.remove('hidden');
+        
+        const container = document.getElementById('quiz-container');
+        survey.forEach((item, i) => {
+            let html = `<div class="quiz-item"><p>${i+1}. ${item.question}</p><select id="q${i}">`;
+            html += `<option value="">請選擇答案</option>`;
+            item.options.forEach((opt, val) => html += `<option value="${val}">${opt}</option>`);
+            html += `</select></div>`;
+            container.innerHTML += html;
+        });
+    }
+
+    // --- 計算測驗分數與身份 ---
+    function calculateQuiz() {
+        let quizScore = 0;
+        for(let i=0; i<survey.length; i++) {
+            const value = document.getElementById(`q${i}`).value;
+            if (!value) return alert("請完成所有題目");
+            quizScore += parseInt(value);
+        }
+        
+        let resultRank = "";
+        let analysis = "";
+        if (quizScore <= 10) { resultRank = "嬰兒"; analysis = "你目前還處在「世界會自己運轉吧？」的階段。責任感還沒完全開機。"; userData.score = 0; }
+        else if (quizScore <= 20) { resultRank = "幼兒"; analysis = "你開始接觸「真實世界」，但常常被現實暴擊。"; userData.score = 1001; }
+        else if (quizScore <= 35) { resultRank = "初級小孩"; analysis = "你有一些生活能力，但穩定度不高，偶爾像走失兒童。"; userData.score = 4001; }
+        else if (quizScore <= 50) { resultRank = "中級小孩"; analysis = "你已經開始有成熟感。很多事情能自己處理。"; userData.score = 15001; }
+        else if (quizScore <= 60) { resultRank = "高級小孩"; analysis = "別人開始覺得你可靠，但你自己知道其實還在硬撐。"; userData.score = 24001; }
+        else if (quizScore <= 70) { resultRank = "初級大人"; analysis = "恭喜，你正式踏入大人世界。你能獨立處理多數事情。"; userData.score = 48001; }
+        else if (quizScore <= 80) { resultRank = "中級大人"; analysis = "你開始有「扛事能力」。情緒、生活、金錢已達平衡。"; userData.score = 98001; }
+        else if (quizScore <= 90) { resultRank = "高級大人"; analysis = "你具備成熟穩定的內核，是團體裡最讓人安心的人。"; userData.score = 248001; }
+        else { resultRank = "頂級大人"; analysis = "你根本是「人生 NPC 指導員」。情緒穩定、邏輯成熟的超成熟狀態。"; userData.score = 448001; }
+
+        userData.rank = resultRank;
+        saveState();
+        document.getElementById('step2').classList.add('hidden');
+        document.getElementById('step3').classList.remove('hidden');
+        document.getElementById('result-text').innerHTML = `恭喜你在測驗中獲得 <b>${quizScore} 分</b>！<br>初始身份：<b>${resultRank}</b><br><br>${analysis}`;
+    }
+
+    // --- 進入系統與更新介面 ---
+    function enterSystem() {
+        document.getElementById('step3').classList.add('hidden');
+        document.getElementById('step4').classList.remove('hidden');
+        updateScoreOptions();
+        updateUI();
+        saveState();
+    }
+
+    window.addEventListener('DOMContentLoaded', function() {
+        loadState();
+        updateScoreOptions();
+    });
+
+    function updateUI() {
+        document.getElementById('display-name').innerText = userData.name;
+        document.getElementById('current-score').innerText = userData.score;
+        
+        let currentLevel = rankConfig.find(r => r.name === userData.rank);
+        let nextLevel = rankConfig[rankConfig.indexOf(currentLevel) + 1] || { name: "頂極致", min: userData.score };
+        
+        document.getElementById('display-rank').innerText = userData.rank;
+        document.getElementById('next-rank-score').innerText = nextLevel.min;
+        
+        let progress = ((userData.score - currentLevel.min) / (nextLevel.min - currentLevel.min)) * 100;
+        document.getElementById('exp-fill').style.width = Math.min(progress, 100) + "%";
+
+        // 自動升級檢查
+        if(userData.score >= nextLevel.min && rankConfig.indexOf(currentLevel) < rankConfig.length - 1) {
+            userData.rank = nextLevel.name;
+            updateUI();
+        }
+        renderTasks();
+    }
+
+    // --- 任務邏輯 ---
+    function updateScoreOptions() {
+        const type = document.getElementById('task-type').value;
+        const select = document.getElementById('task-points');
+        const weeklyValues = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        const monthlyValues = [10, 20, 30, 50, 75, 100];
+        const specialValues = [100, 200, 300, 500, 750, 1000];
+
+        select.innerHTML = "";
+        if (type === 'weekly') {
+            weeklyValues.forEach(val => select.innerHTML += `<option value="${val}">${val}分</option>`);
+        } else if (type === 'monthly') {
+            monthlyValues.forEach(val => select.innerHTML += `<option value="${val}">${val}分</option>`);
+        } else {
+            specialValues.forEach(val => select.innerHTML += `<option value="${val}">${val}分</option>`);
+        }
+    }
+
+    function addTask() {
+        const name = document.getElementById('task-name').value;
+        const type = document.getElementById('task-type').value;
+        const pts = parseInt(document.getElementById('task-points').value);
+        if(!name) return;
+
+        if(type !== 'special' && tasks[type].length >= 20) return alert("該類型任務已達20個上限");
+        
+        tasks[type].push({ name, pts, id: Date.now() });
+        document.getElementById('task-name').value = "";
+        renderTasks();
+        saveState();
+    }
+
+    function renderTasks() {
+        ['weekly', 'monthly', 'special'].forEach(type => {
+            const list = document.getElementById(`list-${type}`);
+            list.innerHTML = "";
+            tasks[type].forEach(t => {
+                list.innerHTML += `
+                    <div class="task-item">
+                        <span>${t.name} (+${t.pts})</span>
+                        <div class="task-btns">
+                            <button class="btn-done" onclick="completeTask('${type}', ${t.id}, ${t.pts})">完成</button>
+                            <button class="btn-del" onclick="deleteTask('${type}', ${t.id})">刪除</button>
+                        </div>
+                    </div>`;
+            });
+        });
+    }
+
+    function completeTask(type, id, pts) {
+        userData.score += pts;
+        deleteTask(type, id);
+        updateUI();
+        saveState();
+    }
+
+    function deleteTask(type, id) {
+        tasks[type] = tasks[type].filter(t => t.id !== id);
+        renderTasks();
+        saveState();
+    }
+</script>
+
+</body>
+</html>
